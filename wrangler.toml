@@ -1,59 +1,20 @@
-#===========================================================================================
-#  Field Officer Location Tracker — Cloudflare Worker configuration
-#
-#  Before your first deploy, replace the two PASTE_… placeholders below.
-#  Everything else can stay as-is.
-#===========================================================================================
-
 name = "field-officer-tracker"
 main = "src/index.js"
 compatibility_date = "2025-06-01"
-
-# Serves the app on https://field-officer-tracker.<your-subdomain>.workers.dev
 workers_dev = true
 
-
-#-------------------------------------------------------------------------------------------
-#  D1 — the database (officers + check-ins)
-#
-#    npx wrangler d1 create field-officers
-#
-#  Copy the database_id it prints into the line below.
-#-------------------------------------------------------------------------------------------
 [[d1_databases]]
-binding       = "DB"
+binding = "DB"
 database_name = "field-officers"
-database_id   = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+database_id = "51b96147-1ee3-45a1-8eda-de25378dcb1a"
 
-
-#-------------------------------------------------------------------------------------------
-#  R2 — photo storage
-#
-#    npx wrangler r2 bucket create field-officer-photos
-#-------------------------------------------------------------------------------------------
 [[r2_buckets]]
-binding     = "PHOTOS"
+binding = "PHOTOS"
 bucket_name = "field-officer-photos"
 
-
-#-------------------------------------------------------------------------------------------
-#  Plain variables (safe to commit)
-#-------------------------------------------------------------------------------------------
 [vars]
-ORG_NAME      = "SKD Health"
-CONTACT_EMAIL = "PASTE_YOUR_EMAIL_HERE"   # OpenStreetMap asks for a contact address
-
-
-#-------------------------------------------------------------------------------------------
-#  Secrets — NEVER put these here. Set them with:
-#
-#     npx wrangler secret put MANAGER_PASS
-#     npx wrangler secret put ADMIN_PASS
-#     npx wrangler secret put LOCATIONIQ_KEY     (optional)
-#
-#  For local development, put them in .dev.vars (git-ignored).
-#  For GitHub Actions, add them as repository secrets — see .github/workflows/deploy.yml
-#-------------------------------------------------------------------------------------------
+ORG_NAME = "SKD Health"
+CONTACT_EMAIL = "sujith.dn@skdhealth.com"
 
 [observability]
 enabled = true
