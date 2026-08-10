@@ -46,6 +46,60 @@ function avatarFallback(name) {
     String(name || '?').charAt(0).toUpperCase() + '</text></svg>');
 }
 
+function firstName(n) {
+  const w = String(n || '').trim().split(/\s+/)[0] || '';
+  return w.length > 11 ? w.slice(0, 10) + '.' : w;
+}
+
+function popupHtml(c) {
+  return '<div class="pop">' +
+    (c.photoKey ? '<img src="' + photoUrl(c.photoKey) + '" onerror="this.style.display=' + "'none'" + '">' : '') +
+    '<b>' + c.name + '</b><p><i class="fas fa-phone"></i> ' + c.mobile +
+    (c.designation ? '<br><i class="fas fa-briefcase"></i> ' + c.designation : '') +
+    '<br><i class="fas fa-location-dot"></i> ' + (c.address || '') +
+    '<br><i class="fas fa-clock"></i> ' + c.tsText +
+    (c.distanceKm !== undefined
+      ? '<br><b style="color:#0074D9"><i class="fas fa-route"></i> ' + c.distanceKm.toFixed(2) + ' km away</b>'
+      : '') +
+    '</p><div class="acts"><a href="tel:' + c.mobile + '"><i class="fas fa-phone"></i> Call</a>' +
+    '<a href="https://wa.me/91' + c.mobile + '" target="_blank"><i class="fab fa-whatsapp"></i> Chat</a>' +
+    '<a href="https://www.google.com/maps/dir/?api=1&destination=' + c.lat + ',' + c.lng +
+    '" target="_blank"><i class="fas fa-diamond-turn-right"></i> Route</a></div></div>';
+}
+
+/* WhatsApp / Photos style pin: photo bubble + pointer tail + name chip + count badge */
+function photoPin(c, count) {
+  const src = c.photoKey ? photoUrl(c.photoKey) : avatarFallback(c.name);
+  const ring = c.type === 'Home' ? '#ff9f1c' : '#ffffff';
+  const label = count > 1 ? firstName(c.name) + ' +' + (count - 1) : firstName(c.name);
+  return L.divIcon({
+    className: '',
+    html:
+      '<div style="position:relative;width:96px;height:92px;margin-left:-19px;' +
+        'filter:drop-shadow(0 4px 9px rgba(0,0,0,.45))">' +
+        '<div style="position:absolute;left:19px;top:0;width:58px;height:58px;border-radius:15px;' +
+          'background:' + ring + ';padding:3px;box-sizing:border-box">' +
+          '<img src="' + src + '" ' +
+            'style="width:52px;height:52px;border-radius:12px;object-fit:cover;display:block;background:#e8f2fb">' +
+        '</div>' +
+        '<div style="position:absolute;left:48px;top:57px;transform:translateX(-50%);width:0;height:0;' +
+          'border-left:8px solid transparent;border-right:8px solid transparent;' +
+          'border-top:9px solid ' + ring + '"></div>' +
+        (count > 1
+          ? '<div style="position:absolute;left:8px;top:40px;background:rgba(10,15,25,.8);color:#fff;' +
+            'font-size:12px;font-weight:700;padding:3px 8px;border-radius:11px;' +
+            'border:1.5px solid rgba(255,255,255,.9)">' + count + '</div>'
+          : '') +
+        '<div style="position:absolute;left:0;right:0;top:70px;text-align:center">' +
+          '<span style="background:rgba(255,255,255,.96);color:#001f3f;font-size:11.5px;font-weight:700;' +
+            'padding:3px 9px;border-radius:11px;white-space:nowrap;' +
+            'box-shadow:0 2px 6px rgba(0,0,0,.3)">' + label + '</span>' +
+        '</div>' +
+      '</div>',
+    iconSize: [96, 92], iconAnchor: [48, 66], popupAnchor: [0, -60]
+  });
+}
+
 /* ---------------------------------------------------------------- SearchableDropdown */
 function SearchableDropdown({ options, value, onChange, placeholder, icon, allowClear = true }) {
   const [open, setOpen] = useState(false);
@@ -478,29 +532,6 @@ function OfficerForm() {
               the map to fine-tune the pin or search for a landmark.</p>
           </div>
 
-          <div className="field">
-            <label>Home Location <span style={{ color: '#6b7c93', fontWeight: 600 }}>(one time)</span></label>
-            <div className={'loc-summary' + (f.home ? ' done' : '')}>
-              {f.home
-                ? <React.Fragment>
-                    <div className="addr">
-                      <i className="fas fa-house" style={{ color: '#2ecc71' }}></i> {f.home.address}
-                    </div>
-                    <div className="coords">
-                      {Number(f.home.lat).toFixed(6)}, {Number(f.home.lng).toFixed(6)}
-                    </div>
-                    <button className="btn btn-soft btn-sm" style={{ marginTop: 10 }}
-                            onClick={() => setPicker('home')}>
-                      <i className="fas fa-pen"></i> Update home
-                    </button>
-                  </React.Fragment>
-                : <button className="btn btn-outline btn-block" onClick={() => setPicker('home')}>
-                    <i className="fas fa-house-chimney"></i> Set home location
-                  </button>}
-            </div>
-            <p className="hint">Saved against your name so the manager can see your base area.</p>
-          </div>
-
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Remarks <span style={{ color: '#6b7c93', fontWeight: 600 }}>(optional)</span></label>
             <textarea className="inp" value={f.notes} placeholder="Visit purpose, hospital / garage name, etc."
@@ -633,8 +664,17 @@ function ManagerDashboard() {
   useEffect(() => {
     if (!authed || tab !== 'map' || !mapEl.current || mapRef.current) return;
     const map = L.map(mapEl.current).setView(DEFAULT_CENTER, 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+    const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+    const sat = L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: '&copy; Esri' }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19 })
+    ]);
+    sat.addTo(map);
+    L.control.layers({ 'Satellite': sat, 'Streets': streets }, null,
+      { position: 'topleft', collapsed: false }).addTo(map);
     mapRef.current = map;
     layerRef.current = L.layerGroup().addTo(map);
     setTimeout(() => map.invalidateSize(), 300);
@@ -644,54 +684,62 @@ function ManagerDashboard() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !layerRef.current) return;
-    layerRef.current.clearLayers();
-    if (circleRef.current) { map.removeLayer(circleRef.current); circleRef.current = null; }
 
-    const bounds = [];
-    shown.forEach(c => {
-      const icon = L.divIcon({
-        className: '',
-        html: '<div style="width:34px;height:34px;border-radius:50% 50% 50% 8px;transform:rotate(45deg);' +
-              'background:' + (c.type === 'Home' ? '#ff9f1c' : '#0074D9') + ';border:3px solid #fff;' +
-              'box-shadow:0 3px 8px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">' +
-              '<i class="fas ' + (c.type === 'Home' ? 'fa-house' : 'fa-user') +
-              '" style="transform:rotate(-45deg);color:#fff;font-size:13px"></i></div>',
-        iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -32]
+    function draw(fit) {
+      layerRef.current.clearLayers();
+      if (circleRef.current) { map.removeLayer(circleRef.current); circleRef.current = null; }
+
+      /* group officers whose pins would overlap at this zoom */
+      const clusters = [];
+      shown.forEach(c => {
+        const pt = map.latLngToLayerPoint([c.lat, c.lng]);
+        let hit = null;
+        for (let i = 0; i < clusters.length; i++) {
+          if (Math.abs(clusters[i].pt.x - pt.x) < 74 && Math.abs(clusters[i].pt.y - pt.y) < 74) {
+            hit = clusters[i]; break;
+          }
+        }
+        if (hit) hit.items.push(c); else clusters.push({ pt: pt, items: [c] });
       });
-      const html = '<div class="pop">' +
-        (c.photoKey ? '<img src="' + photoUrl(c.photoKey) + '">' : '') +
-        '<b>' + c.name + '</b><p><i class="fas fa-phone"></i> ' + c.mobile +
-        (c.designation ? '<br><i class="fas fa-briefcase"></i> ' + c.designation : '') +
-        '<br><i class="fas fa-location-dot"></i> ' + (c.address || '') +
-        '<br><i class="fas fa-clock"></i> ' + c.tsText +
-        (c.distanceKm !== undefined
-          ? '<br><b style="color:#0074D9"><i class="fas fa-route"></i> ' + c.distanceKm.toFixed(2) + ' km away</b>'
-          : '') +
-        '</p><div class="acts"><a href="tel:' + c.mobile + '"><i class="fas fa-phone"></i> Call</a>' +
-        '<a href="https://wa.me/91' + c.mobile + '" target="_blank"><i class="fab fa-whatsapp"></i> Chat</a>' +
-        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + c.lat + ',' + c.lng +
-        '" target="_blank"><i class="fas fa-diamond-turn-right"></i> Route</a></div></div>';
 
-      L.marker([c.lat, c.lng], { icon: icon }).bindPopup(html).addTo(layerRef.current);
-      bounds.push([c.lat, c.lng]);
-    });
+      const bounds = [];
+      clusters.forEach(cl => {
+        const c = cl.items[0];
+        const n = cl.items.length;
+        const marker = L.marker([c.lat, c.lng], { icon: photoPin(c, n) });
+        if (n > 1) {
+          marker.on('click', () => {
+            map.fitBounds(cl.items.map(x => [x.lat, x.lng]), { padding: [80, 80], maxZoom: 18 });
+          });
+        } else {
+          marker.bindPopup(popupHtml(c));
+        }
+        marker.addTo(layerRef.current);
+        cl.items.forEach(x => bounds.push([x.lat, x.lng]));
+      });
 
-    if (origin) {
-      circleRef.current = L.circle([origin.lat, origin.lng], {
-        radius: radius * 1000, color: '#0074D9', weight: 2, fillColor: '#0074D9', fillOpacity: .08
-      }).addTo(map);
-      L.marker([origin.lat, origin.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div style="width:20px;height:20px;border-radius:50%;background:#e74c3c;' +
-                'border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>',
-          iconSize: [20, 20], iconAnchor: [10, 10]
-        })
-      }).bindPopup('<b>Search point</b><br>' + (origin.address || '')).addTo(layerRef.current);
-      map.fitBounds(circleRef.current.getBounds(), { padding: [30, 30] });
-    } else if (bounds.length) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      if (origin) {
+        circleRef.current = L.circle([origin.lat, origin.lng], {
+          radius: radius * 1000, color: '#0074D9', weight: 2, fillColor: '#0074D9', fillOpacity: .08
+        }).addTo(map);
+        L.marker([origin.lat, origin.lng], {
+          icon: L.divIcon({
+            className: '',
+            html: '<div style="width:20px;height:20px;border-radius:50%;background:#e74c3c;' +
+                  'border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>',
+            iconSize: [20, 20], iconAnchor: [10, 10]
+          })
+        }).bindPopup('<b>Search point</b><br>' + (origin.address || '')).addTo(layerRef.current);
+        if (fit) map.fitBounds(circleRef.current.getBounds(), { padding: [30, 30] });
+      } else if (fit && bounds.length) {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+      }
     }
+
+    draw(true);
+    const onZoom = () => draw(false);      /* regroup pins as the manager zooms */
+    map.on('zoomend', onZoom);
+    return () => { map.off('zoomend', onZoom); };
   }, [shown, origin, radius, tab, authed]);
 
   useEffect(() => {
@@ -835,13 +883,6 @@ function ManagerDashboard() {
                 <label>Filter by Officer</label>
                 <SearchableDropdown options={officerOpts} value={fOfficer} onChange={setFOfficer}
                                     icon="fa-user" placeholder="All officers" />
-              </div>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>Location Type</label>
-                <SearchableDropdown icon="fa-tag" placeholder="All types"
-                  options={[{ value: 'Current', label: 'Current location' },
-                            { value: 'Home', label: 'Home location' }]}
-                  value={fType} onChange={setFType} />
               </div>
             </div>
           </div>
