@@ -532,11 +532,6 @@ function OfficerForm() {
               the map to fine-tune the pin or search for a landmark.</p>
           </div>
 
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Remarks <span style={{ color: '#6b7c93', fontWeight: 600 }}>(optional)</span></label>
-            <textarea className="inp" value={f.notes} placeholder="Visit purpose, hospital / garage name, etc."
-                      onChange={e => set('notes', e.target.value)} />
-          </div>
         </div>
       </div>
 
