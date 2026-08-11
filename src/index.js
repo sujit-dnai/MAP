@@ -398,6 +398,36 @@ async function handleApi(p, request, env, ctx) {
     return json({ ok: true });
   }
 
+  /* ---- manager: delete a check-in ---- */
+  if (p === '/api/checkin/delete' && method === 'POST') {
+    if (!checkManager(request, env)) return json({ ok: false, error: 'Invalid passcode.' }, 401);
+    const body = await request.json().catch(() => ({}));
+    const id = String(body.id || '');
+    if (!id) return json({ ok: false, error: 'id required' }, 400);
+    const row = await env.DB.prepare('SELECT photo_key FROM checkins WHERE id = ?').bind(id).first();
+    await env.DB.prepare('DELETE FROM checkins WHERE id = ?').bind(id).run();
+    if (row && row.photo_key && env.PHOTOS) {
+      try { await env.PHOTOS.delete('photos/' + row.photo_key); } catch (e) {}
+    }
+    return json({ ok: true });
+  }
+
+  /* ---- manager: change ONLY the location of a check-in ---- */
+  if (p === '/api/checkin/location' && method === 'POST') {
+    if (!checkManager(request, env)) return json({ ok: false, error: 'Invalid passcode.' }, 401);
+    const body = await request.json().catch(() => ({}));
+    const lat = num(body.lat), lng = num(body.lng);
+    if (!body.id || lat === null || lng === null)
+      return json({ ok: false, error: 'id, lat and lng are required' }, 400);
+    const geo = body.address
+      ? { address: body.address, city: body.city || '', state: body.state || '', pincode: body.pincode || '' }
+      : await geoReverse(lat, lng, env, ctx);
+    await env.DB.prepare(
+      'UPDATE checkins SET lat = ?, lng = ?, address = ?, city = ?, state = ?, pincode = ? WHERE id = ?'
+    ).bind(lat, lng, geo.address, geo.city, geo.state, geo.pincode, String(body.id)).run();
+    return json({ ok: true, address: geo.address });
+  }
+
   return json({ ok: false, error: 'Unknown endpoint: ' + p }, 404);
 }
 
