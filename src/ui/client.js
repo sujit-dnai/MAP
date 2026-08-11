@@ -597,6 +597,8 @@ function ManagerDashboard() {
   const [fCity, setFCity] = useState('');
   const [fOfficer, setFOfficer] = useState('');
   const [fType, setFType] = useState('');
+  const [fDate, setFDate] = useState('');
+  const [editLoc, setEditLoc] = useState(null);
   const [latestOnly, setLatestOnly] = useState(true);
   const [picker, setPicker] = useState(false);
   const [origin, setOrigin] = useState(null);
@@ -629,8 +631,9 @@ function ManagerDashboard() {
     if (fCity) list = list.filter(c => c.city === fCity);
     if (fOfficer) list = list.filter(c => (c.mobile || c.name) === fOfficer);
     if (fType) list = list.filter(c => c.type === fType);
+    if (fDate) list = list.filter(c => c.dateKey === fDate);
     return list;
-  }, [data, latestOnly, fCity, fOfficer, fType]);
+  }, [data, latestOnly, fCity, fOfficer, fType, fDate]);
 
   const nearby = useMemo(() => {
     if (!origin) return null;
@@ -655,6 +658,28 @@ function ManagerDashboard() {
     return Object.keys(m).map(k => ({ value: k, label: m[k].name, sub: m[k].mobile }))
                  .sort((a, b) => a.label.localeCompare(b.label));
   }, [data]);
+
+  const dateOpts = useMemo(() => {
+    if (!data) return [];
+    const s = {};
+    data.checkins.forEach(c => { s[c.dateKey] = 1; });
+    return Object.keys(s).sort().reverse().map(d => ({ value: d, label: d }));
+  }, [data]);
+
+  function delCheckin(c, e) {
+    if (e) e.stopPropagation();
+    Swal.fire({
+      title: 'Delete this check-in?',
+      html: '<b>' + c.name + '</b><br>' + c.tsText, icon: 'warning',
+      showCancelButton: true, confirmButtonColor: '#e74c3c', confirmButtonText: 'Delete'
+    }).then(res => {
+      if (!res.isConfirmed) return;
+      api('/api/checkin/delete', { method: 'POST', body: { id: c.id } }).then(r => {
+        if (!r || !r.ok) return Swal.fire('Failed', (r && r.error) || 'Error', 'error');
+        load(true);
+      });
+    });
+  }
 
   useEffect(() => {
     if (!authed || tab !== 'map' || !mapEl.current || mapRef.current) return;
@@ -808,6 +833,22 @@ function ManagerDashboard() {
                         onCancel={() => setPicker(false)}
                         onConfirm={loc => { setOrigin(loc); setPicker(false); }} />}
 
+      {editLoc &&
+        <LocationPicker title={'Move pin - ' + editLoc.name}
+                        initial={{ lat: editLoc.lat, lng: editLoc.lng }}
+                        onCancel={() => setEditLoc(null)}
+                        onConfirm={loc => {
+                          api('/api/checkin/location', {
+                            method: 'POST',
+                            body: { id: editLoc.id, lat: loc.lat, lng: loc.lng, address: loc.address,
+                                    city: loc.city, state: loc.state, pincode: loc.pincode }
+                          }).then(r => {
+                            setEditLoc(null);
+                            if (!r || !r.ok) return Swal.fire('Failed', (r && r.error) || 'Error', 'error');
+                            load(true);
+                          });
+                        }} />}
+
       <div className="wrap-wide">
         <div className="kpis">
           <div className="kpi"><i className="fas fa-users"></i>
@@ -879,6 +920,11 @@ function ManagerDashboard() {
                 <SearchableDropdown options={officerOpts} value={fOfficer} onChange={setFOfficer}
                                     icon="fa-user" placeholder="All officers" />
               </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Filter by Date</label>
+                <SearchableDropdown options={dateOpts} value={fDate} onChange={setFDate}
+                                    icon="fa-calendar-day" placeholder="All dates" />
+              </div>
             </div>
           </div>
         </div>
@@ -896,15 +942,15 @@ function ManagerDashboard() {
         </div>
 
         {tab === 'map' &&
-          <div className="grid2">
-            <div className="card"><div className="mgr-map" ref={mapEl}></div></div>
+          <React.Fragment>
+            <div className="card" style={{ padding: 10 }}><div className="mgr-map" ref={mapEl}></div></div>
             <div className="card">
               <h3><i className="fas fa-users-viewfinder"></i>
                 {origin ? ' Officers within ' + radius + ' km' : ' All officers on map'}
                 <span style={{ marginLeft: 'auto', background: '#e8f2fb', color: '#001f3f',
                                padding: '4px 11px', borderRadius: 20, fontSize: 12 }}>{shown.length}</span>
               </h3>
-              <div className="near-list">
+              <div className="grid3" style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 4 }}>
                 {shown.length === 0 && <div className="sd-empty">No officers match the current filters.</div>}
                 {shown.map(c =>
                   <div key={c.id} className="near-item"
@@ -920,13 +966,20 @@ function ManagerDashboard() {
                                                    whiteSpace: 'nowrap' }}>
                         <i className="fas fa-location-dot"></i> {c.address}</div>
                       <div className="mt"><i className="fas fa-clock"></i> {c.tsText}</div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <button className="btn btn-soft btn-sm"
+                                onClick={e => { e.stopPropagation(); setEditLoc(c); }}>
+                          <i className="fas fa-map-pin"></i> Move</button>
+                        <button className="btn btn-danger btn-sm" onClick={e => delCheckin(c, e)}>
+                          <i className="fas fa-trash"></i> Delete</button>
+                      </div>
                     </div>
                     {c.distanceKm !== undefined &&
                       <div className="km"><b>{c.distanceKm.toFixed(2)}</b><small>KM AWAY</small></div>}
                   </div>)}
               </div>
             </div>
-          </div>}
+          </React.Fragment>}
 
         {tab === 'list' &&
           <div className="card">
