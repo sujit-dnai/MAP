@@ -105,7 +105,7 @@ display:flex;align-items:center;justify-content:center;flex:0 0 auto}
 .grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 @media(max-width:980px){.grid2{grid-template-columns:1fr}}
-.mgr-map{height:520px;border-radius:12px;border:1px solid var(--line)}
+.mgr-map{height:74vh;min-height:520px;border-radius:12px;border:1px solid var(--line)}
 .near-list{max-height:520px;overflow-y:auto}
 .near-item{display:flex;gap:11px;padding:11px;border:1px solid var(--line);border-radius:12px;
 margin-bottom:9px;cursor:pointer;transition:.15s;background:#fff}
